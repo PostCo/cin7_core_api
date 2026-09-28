@@ -8,7 +8,7 @@ RSpec.describe Cin7CoreAPI::Connection do
         expect(env.request_headers["api-auth-applicationkey"]).to eq("test-application-key")
         expect(env.request_headers["Accept"]).to eq("application/json")
         expect(env.request_headers["Content-Type"]).to eq("application/json")
-        expect(env.request_headers["User-Agent"]).to eq("cin7_core_api/0.1.0")
+        expect(env.request_headers["User-Agent"]).to eq("cin7_core_api/#{Cin7CoreAPI::VERSION}")
 
         json_response({"Company" => "PostCo Test"})
       end
@@ -104,6 +104,9 @@ RSpec.describe Cin7CoreAPI::Connection do
 
     expect do
       build_client(stubs).me.retrieve
-    end.to raise_error(Cin7CoreAPI::TransportError, /execution expired/)
+    end.to raise_error(Cin7CoreAPI::TransportError, /Faraday::TimeoutError/) { |error|
+      expect(error).not_to be_ambiguous
+      expect(error.cause).to be_nil
+    }
   end
 end

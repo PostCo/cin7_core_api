@@ -65,6 +65,34 @@ module Cin7CoreAPI
       @customer_credits ||= Resources::CustomerCredits.new(connection)
     end
 
+    def orders
+      @orders ||= Resources::Orders.new(connection)
+    end
+
+    def invoices
+      @invoices ||= Resources::Invoices.new(connection)
+    end
+
+    def manual_journals
+      @manual_journals ||= Resources::ManualJournals.new(connection)
+    end
+
+    def journals
+      @journals ||= Resources::Journals.new(connection)
+    end
+
+    def tax_rules
+      @tax_rules ||= Resources::TaxRules.new(connection)
+    end
+
+    def webhooks
+      @webhooks ||= Resources::Webhooks.new(connection)
+    end
+
+    def inspect
+      "#<#{self.class}>"
+    end
+
     private
 
     def validate_credential!(name, value)

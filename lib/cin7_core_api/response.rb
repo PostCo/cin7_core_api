@@ -18,5 +18,9 @@ module Cin7CoreAPI
     def no_content?
       status == 204 || body.nil?
     end
+
+    def inspect
+      "#<#{self.class} status=#{status}>"
+    end
   end
 end

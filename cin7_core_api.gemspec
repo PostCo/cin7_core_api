@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.email = ["engineering@postco.co"]
 
   spec.summary = "A Ruby client for the CIN7 Core API v2"
-  spec.description = "A small, explicit Ruby client for reading resources from the CIN7 Core API v2."
+  spec.description = "A small, explicit Ruby client for CIN7 Core API v2 reads and writes, without automatic retries."
   spec.homepage = "https://github.com/PostCo/cin7_core_api"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.3.0"
