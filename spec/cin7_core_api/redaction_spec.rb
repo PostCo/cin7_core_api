@@ -42,6 +42,85 @@ RSpec.describe "CIN7 Core credential redaction" do
     }
   end
 
+  it "keeps webhook identifiers usable when a custom header contains zero" do
+    hook_id = "0bd90aa9-72f9-4f9c-bb0d-9f7cc406b07a"
+    hook = {"ID" => hook_id, "Type" => "Sale/Created", "IsActive" => true,
+            "ExternalHeaders" => [{"Key" => "X-Option", "Value" => "0"}],
+            "Note" => "echo: prefix0suffix"}
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/webhooks") { json_response({"Webhooks" => [hook]}) }
+      stub.put("/ExternalApi/v2/webhooks") do |env|
+        expect(JSON.parse(env.body)).to eq("ID" => hook_id, "IsActive" => false)
+        json_response({"Webhooks" => [hook.merge("IsActive" => false)]})
+      end
+      stub.delete("/ExternalApi/v2/webhooks?ID=#{hook_id}") { json_response({"Webhooks" => []}) }
+    end
+    client = build_client(stubs)
+    listed = client.webhooks.list.body.fetch("Webhooks").first
+    expect(listed.fetch("ID")).to eq(hook_id)
+    expect(listed.fetch("ExternalHeaders")).to eq("[FILTERED]")
+    expect(listed.fetch("Note")).to eq("echo: prefix[FILTERED]suffix")
+    updated = client.webhooks.update(payload: {"ID" => listed.fetch("ID"), "IsActive" => false})
+    client.webhooks.delete(id: updated.body.fetch("Webhooks").first.fetch("ID"))
+    stubs.verify_stubbed_calls
+  end
+
+  %w[body headers ID Webhooks ExternalBearerToken].each do |credential|
+    it "preserves envelope and schema keys when a credential equals #{credential}" do
+      payload = {"ExternalBearerToken" => credential}
+      stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+        stub.post("/ExternalApi/v2/webhooks") do |env|
+          expect(JSON.parse(env.body)).to eq(payload)
+          json_response({"Webhooks" => [payload.merge("ID" => "hook-id", "Note" => "echo: #{credential}")]},
+            headers: {"X-Message" => "echo: #{credential}"})
+        end
+      end
+      response = build_client(stubs).webhooks.create(payload: payload)
+      hook = response.body.fetch("Webhooks").first
+      expect(hook.keys).to contain_exactly("ExternalBearerToken", "ID", "Note")
+      expect(hook.fetch("ID")).to eq("hook-id")
+      expect(hook.fetch("ExternalBearerToken")).to eq("[FILTERED]")
+      expect(hook.fetch("Note")).to eq("echo: [FILTERED]")
+      expect(response.headers.fetch("x-message")).to eq("echo: [FILTERED]")
+      expect(response.inspect).to eq("#<Cin7CoreAPI::Response status=200>")
+      expect(payload).to eq("ExternalBearerToken" => credential)
+      stubs.verify_stubbed_calls
+    end
+  end
+
+  it "preserves GUID identifiers without exempting exact credential matches or free text" do
+    identifier = "00000000-0000-0000-0000-000000000000"
+    secret = "11111111-1111-1111-1111-111111111111"
+    value = {"SaleID" => identifier, "TaskID" => identifier, "CreditID" => nil, "ID" => secret,
+             "Message" => "echo: #{identifier} #{secret}", "Note" => identifier}
+    filtered = Cin7CoreAPI::Redactor.new(["0", secret]).filter(value)
+    expect(filtered.fetch("SaleID")).to eq(identifier)
+    expect(filtered.fetch("TaskID")).to eq(identifier)
+    expect(filtered.fetch("CreditID")).to be_nil
+    expect(filtered.fetch("ID")).to eq("[FILTERED]")
+    expect(filtered.fetch("Message")).not_to include("0", secret)
+    expect(filtered.fetch("Note")).not_to include("0")
+  end
+
+  it "retains ambiguous write errors and redacts echoes when a credential equals body" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.post("/ExternalApi/v2/webhooks") do
+        json_response({"Message" => "echo: body"}, status: 503, headers: {"X-Message" => "echo: body"})
+      end
+    end
+    expect do
+      build_client(stubs).webhooks.create(payload: {"ExternalBearerToken" => "body"})
+    end.to raise_error(Cin7CoreAPI::ServerError) { |error|
+      expect(error).to be_ambiguous
+      expect(error.status).to eq(503)
+      expect(error.body.fetch("Message")).to eq("echo: [FILTERED]")
+      expect(error.headers.fetch("x-message")).to eq("echo: [FILTERED]")
+      expect(error.full_message).not_to include("echo: body")
+      expect(error.cause).to be_nil
+    }
+    stubs.verify_stubbed_calls
+  end
+
   it "redacts known secrets and labeled secrets from non-JSON bodies" do
     stubs = Faraday::Adapter::Test::Stubs.new do |stub|
       stub.post("/ExternalApi/v2/webhooks") do

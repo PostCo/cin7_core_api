@@ -151,7 +151,7 @@ response = client.payments.create(payload: {
 payment_id = response.body.fetch("ID")
 ```
 
-`PAYMENT` requires an authorized invoice; `REFUND` requires an authorized credit note. Amounts use customer-currency major units, not cents. `Account` is a chart-of-accounts code. Payments backed by `CreditID` restrict updates to amount/account, and prepayments cannot be updated. The client preserves supplied FX precision, including five-place values such as `1.42541`; it does not truncate to the Blueprint's four-place annotation.
+`PAYMENT` requires an authorized invoice; `REFUND` requires an authorized credit note. Amounts use customer-currency major units, not cents. `Account` is a chart-of-accounts code. Payments backed by `CreditID` cannot have their `Amount` or `Account` updated, and prepayments cannot be updated. The client preserves supplied FX precision, including five-place values such as `1.42541`; it does not truncate to the Blueprint's four-place annotation.
 
 Order and invoice writes require the appropriate draft/not-available state. The method name `create` denotes POST: sale document POSTs can replace existing collections. Preserve all unrelated lines, charges, taxes and discounts. An invoice PUT can omit collections; supplying an empty collection deletes its contents. The all-zero `TaskID` explicitly requests a new invoice; the client never supplies it automatically.
 
@@ -229,7 +229,7 @@ Neither a payment reference nor a journal reference is a documented server-side 
 
 ### Sensitive data
 
-The transport removes known API credentials and credential-bearing fields from response bodies/headers, including webhook tokens, passwords, usernames, authorization/cookie headers, and custom `ExternalHeaders`. It also filters known credential values echoed in other text. Outbound payloads are sent unchanged, and caller-owned Hashes are not mutated. Response and client/connection/resource inspection omit payloads and authentication state. Error messages omit response bodies; inspect `error.body` for sanitized details. Transport errors deliberately omit the upstream message and cause, which may contain the authenticated request.
+The transport removes known API credentials and credential-bearing fields from response bodies/headers, including webhook tokens, passwords, usernames, authorization/cookie headers, and custom `ExternalHeaders`. It also filters known credential values echoed in other text. JSON field names stay intact; GUID identifiers are filtered only when the complete value matches a known credential. Outbound payloads are sent unchanged, and caller-owned Hashes are not mutated. Response and client/connection/resource inspection omit payloads and authentication state. Error messages omit response bodies; inspect `error.body` for sanitized details. Transport errors deliberately omit the upstream message and cause, which may contain the authenticated request.
 
 Keep webhook credentials in your own encrypted configuration: sanitized webhook responses are **not** suitable for round-tripping as update payloads. Redaction targets credentials; ordinary business data and customer information still require appropriate application logging controls.
 

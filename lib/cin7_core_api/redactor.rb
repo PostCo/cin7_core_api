@@ -5,6 +5,7 @@ module Cin7CoreAPI
   class Redactor
     FILTERED = "[FILTERED]"
     SENSITIVE_KEY = /authorization|authentication|password|passwd|secret|token|cookie|apikey|applicationkey|accountid|externalusername/i
+    GUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
     def initialize(secrets = [])
       @secrets = secrets.grep(String).reject(&:empty?).uniq.sort_by { |value| -value.length }.map { |value| value.dup.freeze }.freeze
@@ -18,8 +19,12 @@ module Cin7CoreAPI
       case value
       when Hash
         value.each_with_object({}) do |(key, entry), result|
-          result[filter_string(key.to_s)] = if sensitive_key?(key) || external_headers?(key)
+          # Field names are schema, even when a credential happens to match one.
+          result[key.to_s] = if sensitive_key?(key) || external_headers?(key)
             FILTERED
+          elsif guid_identifier?(key, entry)
+            # Short header values must not corrupt IDs used by subsequent calls.
+            @secrets.include?(entry) ? FILTERED : entry.dup
           else
             filter(entry)
           end
@@ -46,6 +51,10 @@ module Cin7CoreAPI
 
     def external_headers?(key)
       key.to_s.gsub(/[^a-z0-9]/i, "").casecmp?("externalheaders")
+    end
+
+    def guid_identifier?(key, value)
+      key.to_s.downcase.end_with?("id") && value.is_a?(String) && GUID.match?(value)
     end
 
     def sensitive_values(value)
