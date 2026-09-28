@@ -1,6 +1,148 @@
 # frozen_string_literal: true
 
 RSpec.describe "CIN7 Core credential redaction" do
+  let(:blueprint_webhook) do
+    {
+      "ID" => "0bd90aa9-72f9-4f9c-bb0d-9f7cc406b07a",
+      "Type" => "Sale/OrderAuthorised",
+      "Name" => "Sale order has been authorised",
+      "IsActive" => false,
+      "ExternalURL" => "https://hookb.in/Zn8950P7",
+      "ExternalAuthorizationType" => "basicauth",
+      "ExternalUserName" => "Hello",
+      "ExternalPassword" => "123",
+      "ExternalBearerToken" => "",
+      "ExternalHeaders" => [{"Key" => "Key", "Value" => "123"}, {"Key" => "6", "Value" => "0"}]
+    }
+  end
+
+  it "preserves callback identity for the complete Blueprint webhook and other subscriptions" do
+    other_hook = blueprint_webhook.merge(
+      "ID" => "1cf8cb83-bf39-494b-87f9-1252b684d6d5", "Type" => "Sale/Created", "IsActive" => true,
+      "ExternalURL" => "https://PostCo.example:443/webhook/cin7_core/10123?shop=HelloShop&version=10&format=%30a#section0",
+      "ExternalAuthorizationType" => "bearerauth", "ExternalUserName" => "Sale", "ExternalPassword" => nil,
+      "ExternalBearerToken" => "callback-private-token", "ExternalHeaders" => []
+    )
+    payload = {"Webhooks" => [blueprint_webhook, other_hook]}
+    original = Marshal.load(Marshal.dump(payload))
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/webhooks") { json_response(payload) }
+      stub.post("/ExternalApi/v2/webhooks") do |env|
+        expect(JSON.parse(env.body)).to eq(original.fetch("Webhooks").first)
+        json_response({"Webhooks" => [blueprint_webhook]})
+      end
+    end
+
+    client = build_client(stubs)
+    created = client.webhooks.create(payload: blueprint_webhook).body.fetch("Webhooks").first
+    expect(created.fetch("ExternalURL")).to eq(blueprint_webhook.fetch("ExternalURL"))
+    hooks = client.webhooks.list.body.fetch("Webhooks")
+    hooks.zip(payload.fetch("Webhooks")).each do |actual, expected|
+      %w[ID Type IsActive ExternalURL ExternalAuthorizationType].each do |key|
+        expect(actual.fetch(key)).to eq(expected.fetch(key))
+      end
+      %w[ExternalUserName ExternalPassword ExternalBearerToken ExternalHeaders].each do |key|
+        expect(actual.fetch(key)).to eq("[FILTERED]")
+      end
+    end
+    expect(payload).to eq(original)
+    stubs.verify_stubbed_calls
+  end
+
+  it "sanitizes URL credentials and their earlier free-text echoes without re-encoding callback identity" do
+    url = "https://url-user:uri%2Dpassword@PostCo.example:443/hooks/10123?shop=10&access%5Ftoken=url%2Dtoken" \
+      "&API_AUTH_ACCOUNTID=url-account&password=query%20password&authorization=Bearer%20signed-token&opaque=test-application-key&next=HelloShop#secret=fragment-secret"
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/webhooks") do
+        json_response({"Message" => "url-user uri-password uri%2Dpassword url-token url%2Dtoken url-account query password signed-token fragment-secret",
+                       "Webhooks" => [blueprint_webhook.merge("ExternalURL" => url)]})
+      end
+    end
+    response = build_client(stubs).webhooks.list
+    hook = response.body.fetch("Webhooks").first
+    expect(hook.fetch("ExternalURL")).to eq(
+      "https://[FILTERED]@PostCo.example:443/hooks/10123?shop=10&access%5Ftoken=[FILTERED]" \
+      "&API_AUTH_ACCOUNTID=[FILTERED]&password=[FILTERED]&authorization=[FILTERED]&opaque=[FILTERED]&next=HelloShop#secret=[FILTERED]"
+    )
+    %w[url-user uri-password uri%2Dpassword url-token url%2Dtoken url-account signed-token fragment-secret test-application-key].each do |secret|
+      expect(JSON.generate(response.body)).not_to include(secret)
+    end
+    expect(response.body.fetch("Message")).not_to include("query password")
+  end
+
+  it "filters complete credential components in callbacks while retaining incidental substrings" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/webhooks") do
+        json_response({"Webhooks" => [blueprint_webhook.merge(
+          "ExternalURL" => "https://private-token.callback0.example/hooks/private%2Dtoken?opaque=private-token&reference=prefix0suffix",
+          "ExternalBearerToken" => "private-token"
+        )]})
+      end
+    end
+    url = build_client(stubs).webhooks.list.body.fetch("Webhooks").first.fetch("ExternalURL")
+    expect(url).to eq("https://[FILTERED].callback0.example/hooks/[FILTERED]?opaque=[FILTERED]&reference=prefix0suffix")
+  end
+
+  it "filters outbound callback credentials echoed in a non-JSON error without changing the submitted URL" do
+    payload = {"ExternalURL" => "https://callback-user:callback-password@example.test/hook?api_key=query%2Dcredential"}
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.post("/ExternalApi/v2/webhooks") do |env|
+        expect(JSON.parse(env.body)).to eq(payload)
+        [503, {}, "callback-user callback-password query-credential query%2Dcredential"]
+      end
+    end
+    expect { build_client(stubs).webhooks.create(payload: payload) }.to raise_error(Cin7CoreAPI::ServerError) { |error|
+      expect(error.body).to eq("[FILTERED] [FILTERED] [FILTERED] [FILTERED]")
+      expect(error).to be_ambiguous
+      expect(error.cause).to be_nil
+    }
+  end
+
+  it "filters username-only URL authentication and rejects malformed credential-bearing callbacks safely" do
+    %w[https://private-user@example.test/hook https://user:password@example.test/invalid%query?token=%ZZ].each do |url|
+      filtered = Cin7CoreAPI::Redactor.new.with_sensitive_values({"ExternalURL" => url}).filter({"ExternalURL" => url})
+      expect(filtered.fetch("ExternalURL")).not_to include("private-user", "password", "%ZZ")
+    end
+  end
+
+  it "preserves business account GUIDs and nulls across bank/account reads without learning them as credentials" do
+    bank_id = "d5b0294d-e931-47d4-a58c-5c9e2d7d3090"
+    bank = {"AccountID" => bank_id, "Bank" => "Unknown Bank", "AccountName" => "EFT bank account",
+            "AccountNumber" => "No Number", "AccountCode" => "713", "Currency" => "AUD",
+            "StatementBalance" => 0, "BalanceInDear" => 0, "InitialBalance" => 0}
+    banks = {"Total" => 1, "Page" => 1, "BankAccountsList" => [bank]}
+    accounts = {"Total" => 2, "Page" => 1, "AccountsList" => [
+      {"Code" => "713", "BankAccountId" => bank_id, "Description" => "Linked bank #{bank_id}"},
+      {"Code" => "800", "BankAccountId" => nil, "AccountID" => nil}
+    ]}
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/ref/account/bank") { json_response(banks) }
+      stub.get("/ExternalApi/v2/ref/account") { json_response(accounts) }
+    end
+    client = build_client(stubs)
+    expect(client.bank_accounts.list.body).to eq(banks)
+    expect(client.accounts.list.body).to eq(accounts)
+    stubs.verify_stubbed_calls
+  end
+
+  it "still filters API account-ID headers and exact client credential echoes in business identifier fields" do
+    credential = "11111111-1111-1111-1111-111111111111"
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/ref/account/bank") do
+        json_response({"BankAccountsList" => [{"AccountID" => credential, "BankAccountId" => credential}],
+                       "ExternalURL" => credential, "Message" => "echo: #{credential} unknown-account-credential"},
+          headers: {"API_AUTH_ACCOUNTID" => "unknown-account-credential", "X-Echo" => credential})
+      end
+    end
+    client = Cin7CoreAPI::Client.new(account_id: credential, application_key: "test-application-key",
+      base_url: ClientHelpers::TEST_BASE_URL, adapter: [:test, stubs])
+    response = client.bank_accounts.list
+    expect(response.body.fetch("BankAccountsList").first).to eq("AccountID" => "[FILTERED]", "BankAccountId" => "[FILTERED]")
+    expect(response.body.fetch("ExternalURL")).to eq("[FILTERED]")
+    expect(response.headers.fetch("api_auth_accountid")).to eq("[FILTERED]")
+    expect(JSON.generate([response.body, response.headers])).not_to include(credential, "unknown-account-credential")
+  end
+
   it "sanitizes webhook responses and headers without changing outbound credentials or input" do
     payload = {"Type" => "Sale/Created", "ExternalAuthorizationType" => "bearerauth",
                "ExternalBearerToken" => "private-hook-token", "ExternalPassword" => "private-password",

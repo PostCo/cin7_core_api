@@ -231,6 +231,8 @@ Neither a payment reference nor a journal reference is a documented server-side 
 
 The transport removes known API credentials and credential-bearing fields from response bodies/headers, including webhook tokens, passwords, usernames, authorization/cookie headers, and custom `ExternalHeaders`. It also filters known credential values echoed in other text. JSON field names stay intact; GUID identifiers are filtered only when the complete value matches a known credential. Outbound payloads are sent unchanged, and caller-owned Hashes are not mutated. Response and client/connection/resource inspection omit payloads and authentication state. Error messages omit response bodies; inspect `error.body` for sanitized details. Transport errors deliberately omit the upstream message and cause, which may contain the authenticated request.
 
+Business `AccountID` and `BankAccountId` values remain GUIDs or null; they are distinct from the `api-auth-accountid` credential header. Callback `ExternalURL` values retain their spelling and escaping for subscription matching. URL userinfo and sensitive query/fragment parameters are filtered, as are complete credential values in URL components; incidental substrings from other subscriptions' credentials do not rewrite callback identity. URL credentials are also removed from free-text echoes. Malformed callback URLs are filtered entirely.
+
 Keep webhook credentials in your own encrypted configuration: sanitized webhook responses are **not** suitable for round-tripping as update payloads. Redaction targets credentials; ordinary business data and customer information still require appropriate application logging controls.
 
 ## Development
