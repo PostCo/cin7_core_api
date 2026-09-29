@@ -253,7 +253,23 @@ mise exec -- bundle exec standardrb --cache false $(git ls-files '*.rb' '*.gemsp
 mise exec -- bundle exec rake build
 ```
 
-Stage intended new source/spec files before using the tracked-file lint command. CI tests Ruby 3.3 and 3.4. Specs use Faraday's test adapter and do not verify live accounting behavior. Inspect the built gem's file list before release: the gemspec packages only `lib/**/*.rb`, README, changelog and license. Preserve untracked research files. Publication and push require a separate release decision; RubyGems MFA remains required.
+Stage intended new source/spec files before using the tracked-file lint command. CI tests Ruby 3.3 and 3.4. Specs use Faraday's test adapter and do not verify live accounting behavior. Inspect the built gem's file list before release: the gemspec packages only `lib/**/*.rb`, README, changelog and license. Preserve untracked research files.
+
+## Releasing
+
+Publishing a GitHub release triggers `.github/workflows/release.yml`. It requires the tagged commit to be part of `main`, verifies the tag matches `v<VERSION>`, runs tests and lint, builds the gem, and publishes that exact version to RubyGems. Draft releases and ordinary branch pushes do not publish gems.
+
+One-time setup: in the `cin7_core_api` gem's RubyGems **Trusted publishers** settings, register repository owner `PostCo`, repository `cin7_core_api`, workflow filename `release.yml`, and environment `release`. Use the same `release` environment in GitHub. [RubyGems Trusted Publishing](https://guides.rubygems.org/trusted-publishing/) uses GitHub OIDC, so no long-lived API key or interactive MFA code is needed in CI. Signing in locally does not configure this trust relationship.
+
+For each new version:
+
+1. Update `lib/cin7_core_api/version.rb` and `CHANGELOG.md`, review the PR, and merge it into `main`.
+2. Create and publish a GitHub release at that merged commit, with a tag such as `v0.2.1` matching the gem version.
+3. Check the **Publish gem** workflow and verify the version is available on RubyGems before updating application dependencies.
+
+The manually published `0.2.0` already exists. Do not republish it; this workflow is for subsequent versions. A failed attempt to publish an existing version does not replace that version. If a workflow is rerun after a partial success, check RubyGems first.
+
+The manual fallback is `bundle exec rake release` from a clean, merged checkout. Tests and Standard run before Bundler's tag/push/publish steps. The main-branch ancestry guard belongs to the GitHub workflow; the manual command does not enforce it. Manual publishing still uses your RubyGems credentials and applicable MFA.
 
 ## CIN7 references
 
