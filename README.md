@@ -9,7 +9,7 @@ Version `0.2.0` adds explicit payment, order, invoice, journal, and webhook oper
 Add the gem to your Gemfile:
 
 ```ruby
-gem "cin7_core_api", "0.2.0"
+gem "cin7_core_api", "0.2.1"
 ```
 
 Then run:
@@ -20,7 +20,7 @@ bundle install
 
 Ruby 3.3 or newer is required.
 
-Version `0.2.0` is published. The `0.2.1` source adds response-decoding safety and callback-identity fixes and remains release preparation until it is published. To evaluate those fixes before release, pin the reviewed full commit SHA from this repository.
+Version `0.2.1` adds response-decoding safety and callback-identity fixes. Published `0.2.0` remains unchanged. Check RubyGems for publication availability; to evaluate a reviewed source before publication, pin its full commit SHA from this repository.
 
 ## Authentication
 

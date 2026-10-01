@@ -187,4 +187,42 @@ RSpec.describe "CIN7 Core write failures" do
     end
     expect(build_client(stubs).me.retrieve.body).to eq({"Name" => "Café"})
   end
+
+  [200, 400, 503].each do |status|
+    ['{"Message":[{"Value":"test-application-key\\udc00"}]}', '{"test-application-key\\udc00":"value"}'].each do |body|
+      it "classifies HTTP #{status} with invalid UTF-8 decoded from JSON keys or nested values" do
+        stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+          stub.post("/ExternalApi/v2/sale/payment") { [status, {}, body] }
+        end
+        error_class = {200 => Cin7CoreAPI::ParseError, 400 => Cin7CoreAPI::BadRequestError, 503 => Cin7CoreAPI::ServerError}.fetch(status)
+
+        expect do
+          build_client(stubs).payments.create(payload: {"TaskID" => "task-id"})
+        end.to raise_error(error_class) { |error|
+          expect(error.ambiguous?).to eq(status != 400)
+          expect(error.status).to eq(status)
+          expect(error.request_method).to eq(:post)
+          expect(error.request_path).to eq("sale/payment")
+          expect(error.body).to be_valid_encoding
+          expect(error.body).not_to include("test-application-key")
+          expect(error.cause).to be_nil
+        }
+        stubs.verify_stubbed_calls
+      end
+    end
+  end
+
+  it "rejects invalid decoded read strings without marking a mutation ambiguous" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/me") { [200, {}, '"\\udc00"'] }
+    end
+    expect { build_client(stubs).me.retrieve }.to raise_error(Cin7CoreAPI::ParseError) { |error| expect(error).not_to be_ambiguous }
+  end
+
+  it "preserves valid surrogate pairs in business data" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/me") { [200, {}, '{"Name":"\\ud83d\\ude00"}'] }
+    end
+    expect(build_client(stubs).me.retrieve.body).to eq({"Name" => "😀"})
+  end
 end

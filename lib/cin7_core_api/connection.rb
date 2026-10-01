@@ -97,9 +97,25 @@ module Cin7CoreAPI
       body = body.dup.force_encoding(Encoding::UTF_8)
       return [body.scrub, false] unless body.valid_encoding?
 
-      [JSON.parse(body), true]
+      parsed = JSON.parse(body)
+      # Some JSON parsers accept lone low-surrogate escapes and produce invalid
+      # strings. Do not expose or regex-filter partially decoded credentials.
+      valid_utf8?(parsed) ? [parsed, true] : [Redactor::FILTERED, false]
     rescue JSON::ParserError
       [body, false]
+    end
+
+    def valid_utf8?(value)
+      case value
+      when Hash
+        value.all? { |key, entry| valid_utf8?(key) && valid_utf8?(entry) }
+      when Array
+        value.all? { |entry| valid_utf8?(entry) }
+      when String
+        value.valid_encoding?
+      else
+        true
+      end
     end
 
     def raise_for_status!(response, context, write:)

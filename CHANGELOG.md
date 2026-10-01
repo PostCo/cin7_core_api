@@ -1,10 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.1] - 2026-10-02
 
-### 0.2.1 (release preparation)
-
-- Keep decompression failures and malformed UTF-8 responses inside the sanitized error contract, preserving uncertain-write recovery without retries.
+- Keep decompression failures and malformed UTF-8 responses, including invalid decoded JSON strings, inside the sanitized error contract, preserving uncertain-write recovery without retries.
 - Preserve callback identity when another webhook subscription has credentials matching this subscription's URL components; continue filtering secrets throughout free text.
 
 ## [0.2.0] - 2026-09-29
