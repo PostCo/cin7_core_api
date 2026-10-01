@@ -89,6 +89,34 @@ module Cin7CoreAPI
       @webhooks ||= Resources::Webhooks.new(connection)
     end
 
+    def fulfilments
+      @fulfilments ||= Resources::Fulfilments.new(connection)
+    end
+
+    def picks
+      @picks ||= Resources::Picks.new(connection)
+    end
+
+    def packs
+      @packs ||= Resources::Packs.new(connection)
+    end
+
+    def shipments
+      @shipments ||= Resources::Shipments.new(connection)
+    end
+
+    def products
+      @products ||= Resources::Products.new(connection)
+    end
+
+    def product_availability
+      @product_availability ||= Resources::ProductAvailability.new(connection)
+    end
+
+    def carriers
+      @carriers ||= Resources::Carriers.new(connection)
+    end
+
     def inspect
       "#<#{self.class}>"
     end

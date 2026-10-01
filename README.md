@@ -9,7 +9,7 @@ Version `0.2.0` adds explicit payment, order, invoice, journal, and webhook oper
 Add the gem to your Gemfile:
 
 ```ruby
-gem "cin7_core_api", "0.2.1"
+gem "cin7_core_api", "0.3.0"
 ```
 
 Then run:
@@ -21,6 +21,38 @@ bundle install
 Ruby 3.3 or newer is required.
 
 Version `0.2.1` adds response-decoding safety and callback-identity fixes. Published `0.2.0` remains unchanged. Check RubyGems for publication availability; to evaluate a reviewed source before publication, pin its full commit SHA from this repository.
+
+Version `0.3.0` adds the explicit native correction and sandbox preparation resources below. It includes the `0.2.1` safety fixes.
+
+## Native correction and sandbox preparation
+
+These methods use the same sanitized errors and never retry. Payloads use Cin7 String field names. `sale_id:` identifies the parent sale; `task_id:` identifies the particular credit-note or fulfilment task.
+
+| Resource method | HTTP contract |
+| --- | --- |
+| `sales.create(payload:)` | POST `sale`; create a header with caller-selected customer, sale type and options |
+| `credit_notes.create(payload:)` | POST `sale/creditnote`; explicit `SaleID` and `TaskID` |
+| `credit_notes.undo(task_id:)` | DELETE `sale/creditnote` with `TaskID` and `Void=false` |
+| `fulfilments.for_sale(sale_id:, include_product_info: false)` | GET `sale/fulfilment`; preserve its `Fulfilments` response collection |
+| `fulfilments.create(payload:)` | POST `sale/fulfilment`; explicit `SaleID` |
+| `fulfilments.undo(task_id:)` | DELETE `sale/fulfilment` with `TaskID` and `Void=false` |
+| `picks.for_task(task_id:, include_product_info: false)` | GET `sale/fulfilment/pick` |
+| `packs.for_task(task_id:, include_product_info: false)` | GET `sale/fulfilment/pack` |
+| `shipments.for_task(task_id:)` | GET `sale/fulfilment/ship` |
+| `picks.create/update(payload:)` | POST/PUT `sale/fulfilment/pick`; explicit `TaskID` |
+| `packs.create/update(payload:)` | POST/PUT `sale/fulfilment/pack`; explicit `TaskID` |
+| `shipments.create/update(payload:)` | POST/PUT `sale/fulfilment/ship`; explicit `TaskID` |
+| `products.list(**filters)` | GET `product`; supports documented product discovery filters |
+| `product_availability.list(**filters)` | GET `ref/productavailability`; `page`, `limit`, `id`, `name`, `sku`, `location`, `batch`, `category` |
+| `carriers.list(**filters)` | GET `ref/carrier`; `page`, `limit`, `carrier_id`, `description` |
+
+Cin7 documents credit-note **POST**, not PUT. Use `create` for an explicit new task or a draft/not-available task; it does not overwrite an authorised note by itself. For a new note, the caller may supply the documented empty GUID `TaskID`; the gem never chooses or inserts it. Forward complete `Lines`, `AdditionalCharges` and `Restock` collections deliberately.
+
+The provider's credit-note DELETE eligibility is unusually narrow and duplicated in its Blueprint: Advanced Sale with credit-note `TaskID = SaleID`. Its applicability to connector-created secondary notes is unproven. Exposing `undo` does not establish that a particular paid, taxed or restocked note can be rebuilt safely. The caller must inspect state, preserve payouts and inventory ownership, check the actual rejection/readback and recover uncertain outcomes before proceeding.
+
+Fulfilment `create` can convert a Simple Sale to Advanced Sale. Pack and shipment **POST may append lines**, while **PUT replaces** eligible draft/not-available documents. Shipment PUT must include all required packed boxes. The caller must preserve quantities, locations, batches, boxes and shipment identity and verify inventory after any restoration. The gem does not authorise a previously fulfilled sale correction or run pick/pack/ship automatically.
+
+The `products` filters are `id`, `page`, `limit`, `name`, `sku`, `modified_since`, `include_deprecated`, `include_bom`, `include_suppliers`, `include_movements`, `include_attachments`, `include_reorder_levels`, and `include_custom_prices`. Nil filters are omitted, boolean false is retained, and unsupported filters fail before dispatch.
 
 ## Authentication
 

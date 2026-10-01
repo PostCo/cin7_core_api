@@ -22,7 +22,7 @@ RSpec.describe Cin7CoreAPI::Client do
     expect(client.sales).to equal(client.sales)
     expect(client.credit_notes).to equal(client.credit_notes)
     expect(client.payments).to equal(client.payments)
-    %i[orders invoices manual_journals journals tax_rules webhooks].each do |resource|
+    %i[orders invoices manual_journals journals tax_rules webhooks fulfilments picks packs shipments products product_availability carriers].each do |resource|
       expect(client.public_send(resource)).to equal(client.public_send(resource))
     end
   end

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2026-10-02
+
+- Add explicit credit-note creation/undo and Advanced Sale fulfilment, pick, pack and shipment resources with readback and distinct POST/PUT semantics.
+- Add sale-header creation plus product, stock availability and carrier reads so sandbox preparation uses resource methods throughout.
+- Preserve caller-supplied task IDs, monetary values, restock and shipment collections; do not select eligibility, append lines or restore inventory implicitly.
+
 ## [0.2.1] - 2026-10-02
 
 - Keep decompression failures and malformed UTF-8 responses, including invalid decoded JSON strings, inside the sanitized error contract, preserving uncertain-write recovery without retries.

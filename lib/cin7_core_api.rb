@@ -21,6 +21,13 @@ require_relative "cin7_core_api/resources/manual_journals"
 require_relative "cin7_core_api/resources/journals"
 require_relative "cin7_core_api/resources/tax_rules"
 require_relative "cin7_core_api/resources/webhooks"
+require_relative "cin7_core_api/resources/fulfilments"
+require_relative "cin7_core_api/resources/picks"
+require_relative "cin7_core_api/resources/packs"
+require_relative "cin7_core_api/resources/shipments"
+require_relative "cin7_core_api/resources/products"
+require_relative "cin7_core_api/resources/product_availability"
+require_relative "cin7_core_api/resources/carriers"
 require_relative "cin7_core_api/client"
 
 module Cin7CoreAPI
