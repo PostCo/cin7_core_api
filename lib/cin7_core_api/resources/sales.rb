@@ -41,6 +41,11 @@ module Cin7CoreAPI
         get("sale", params: options.merge(id: id), parameter_map: RETRIEVE_PARAMETERS)
       end
 
+      def create(payload:)
+        validate_payload!(payload)
+        connection.post("sale", payload: payload)
+      end
+
       def update(payload:)
         validate_payload!(payload, "ID")
         connection.put("sale", payload: payload)

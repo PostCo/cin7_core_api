@@ -29,6 +29,16 @@ module Cin7CoreAPI
         require_parameter!(:sale_id, sale_id)
         get("sale/creditnote", params: options.merge(sale_id: sale_id), parameter_map: FOR_SALE_PARAMETERS)
       end
+
+      def create(payload:)
+        validate_payload!(payload, "SaleID", "TaskID")
+        connection.post("sale/creditnote", payload: payload)
+      end
+
+      def undo(task_id:)
+        require_parameter!(:task_id, task_id)
+        connection.delete("sale/creditnote", params: {"TaskID" => task_id, "Void" => false})
+      end
     end
   end
 end
