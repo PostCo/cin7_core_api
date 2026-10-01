@@ -18,7 +18,7 @@ module Cin7CoreAPI
       self.class.new(@secrets + sensitive_values(value))
     end
 
-    def filter(value)
+    def filter(value, callback_redactor: self)
       case value
       when Hash
         value.each_with_object({}) do |(key, entry), result|
@@ -26,16 +26,18 @@ module Cin7CoreAPI
           result[key.to_s] = if sensitive_key?(key) || external_headers?(key)
             FILTERED
           elsif callback_url?(key) && entry.is_a?(String)
-            filter_url(entry)
+            # Another subscription's credentials may equal this callback's
+            # integration ID or host label. Scope URL filtering to this record.
+            callback_redactor.with_sensitive_values(value).filter_url(entry)
           elsif structured_identifier?(key, entry)
             # Short header values must not corrupt identifiers or schema enums.
             @secrets.include?(entry) ? FILTERED : entry.dup
           else
-            filter(entry)
+            filter(entry, callback_redactor: callback_redactor)
           end
         end
       when Array
-        value.map { |entry| filter(entry) }
+        value.map { |entry| filter(entry, callback_redactor: callback_redactor) }
       when String
         filter_string(value)
       else
@@ -126,6 +128,8 @@ module Cin7CoreAPI
       []
     end
 
+    protected
+
     def filter_url(value)
       return FILTERED if @secrets.include?(value)
 
@@ -144,6 +148,8 @@ module Cin7CoreAPI
     rescue URI::InvalidURIError, ArgumentError
       FILTERED
     end
+
+    private
 
     def filter_authority(authority, host)
       _, separator, host_port = authority.rpartition("@")

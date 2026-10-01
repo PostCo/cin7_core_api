@@ -49,6 +49,26 @@ RSpec.describe "CIN7 Core credential redaction" do
     stubs.verify_stubbed_calls
   end
 
+  it "keeps callback identity when another subscription has matching credentials" do
+    callback = "https://api.postco.example/webhook/cin7_core/123"
+    owned_hook = blueprint_webhook.merge(
+      "ExternalURL" => callback, "ExternalUserName" => nil, "ExternalPassword" => nil,
+      "ExternalBearerToken" => "owned-private-token", "ExternalHeaders" => []
+    )
+    other_hook = blueprint_webhook.merge("ExternalUserName" => "api")
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/webhooks") do
+        json_response({"Message" => "api 123 owned-private-token", "Webhooks" => [other_hook, owned_hook]})
+      end
+    end
+
+    body = build_client(stubs).webhooks.list.body
+    expect(body.fetch("Webhooks").last.fetch("ExternalURL")).to eq(callback)
+    expect(body.fetch("Message")).to eq("[FILTERED] [FILTERED] [FILTERED]")
+    expect(body.fetch("Webhooks").last.fetch("ExternalBearerToken")).to eq("[FILTERED]")
+    stubs.verify_stubbed_calls
+  end
+
   it "sanitizes URL credentials and their earlier free-text echoes without re-encoding callback identity" do
     url = "https://url-user:uri%2Dpassword@PostCo.example:443/hooks/10123?shop=10&access%5Ftoken=url%2Dtoken" \
       "&API_AUTH_ACCOUNTID=url-account&password=query%20password&authorization=Bearer%20signed-token&opaque=test-application-key&next=HelloShop#secret=fragment-secret"

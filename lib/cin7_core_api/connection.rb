@@ -2,6 +2,7 @@
 
 require "faraday"
 require "json"
+require "zlib"
 
 module Cin7CoreAPI
   class Connection
@@ -61,12 +62,10 @@ module Cin7CoreAPI
       context = {request_method: method, request_path: redactor.filter(path.split("?").first)}
       write = method != :get
 
-      raw_response = @http.run_request(method, path, body, nil) do |request|
-        request.params.update(params)
-      end
+      raw_response = dispatch(method, path, body, params, context, write: write)
       parsed_body, valid_json = parse_body(raw_response.body)
       values = {"headers" => normalized_headers(raw_response.headers), "body" => parsed_body}
-      sanitized = redactor.with_sensitive_values(values).filter(values)
+      sanitized = redactor.with_sensitive_values(values).filter(values, callback_redactor: redactor)
       response = Response.new(status: raw_response.status, headers: sanitized.fetch("headers"), body: sanitized.fetch("body"))
 
       raise_for_status!(response, context, write: write)
@@ -75,7 +74,13 @@ module Cin7CoreAPI
       end
 
       response
-    rescue Faraday::Error => error
+    end
+
+    def dispatch(method, path, body, params, context, write:)
+      @http.run_request(method, path, body, nil) do |request|
+        request.params.update(params)
+      end
+    rescue Faraday::Error, Zlib::Error => error
       # Faraday exceptions can retain the entire authenticated request in their cause.
       raise TransportError.new("CIN7 Core transport failed (#{error.class})", ambiguous: write, **context), cause: nil
     end
@@ -86,6 +91,11 @@ module Cin7CoreAPI
 
     def parse_body(body)
       return [nil, true] if body.nil? || body.empty?
+
+      # JSON is UTF-8 even when the adapter labels its bytes as binary. Reject
+      # malformed success bodies, but keep rejection details safe to redact.
+      body = body.dup.force_encoding(Encoding::UTF_8)
+      return [body.scrub, false] unless body.valid_encoding?
 
       [JSON.parse(body), true]
     rescue JSON::ParserError

@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-### 0.2.0 (release preparation)
+### 0.2.1 (release preparation)
+
+- Keep decompression failures and malformed UTF-8 responses inside the sanitized error contract, preserving uncertain-write recovery without retries.
+- Preserve callback identity when another webhook subscription has credentials matching this subscription's URL components; continue filtering secrets throughout free text.
+
+## [0.2.0] - 2026-09-29
 
 - Add explicit sale update/undo, order, invoice, payment, sale manual-journal, standalone journal, tax-rule and webhook operations while preserving existing read methods.
 - Send JSON payloads without rounding amounts or FX rates; distinguish parent sale IDs, document task IDs, payment IDs and webhook IDs.
