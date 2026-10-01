@@ -2,7 +2,7 @@
 
 RSpec.describe "CIN7 Core native correction resource contracts" do
   it "posts a sale header without selecting accounting or fulfillment policy" do
-    payload = {"CustomerID" => "customer-id", "Type" => "Advanced Sale", "SkipQuote" => true, "CurrencyRate" => "1.4253"}
+    payload = {"CustomerID" => "customer-id", "SaleType" => "Advanced", "Location" => "Warehouse", "SkipQuote" => true, "CurrencyRate" => "1.4253"}
     stubs = Faraday::Adapter::Test::Stubs.new do |stub|
       stub.post("/ExternalApi/v2/sale") do |env|
         expect(JSON.parse(env.body)).to eq(payload)
@@ -65,7 +65,12 @@ RSpec.describe "CIN7 Core native correction resource contracts" do
     it "reads #{resource} by fulfilment task and preserves the response shape" do
       options = (resource == :shipments) ? {} : {include_product_info: false}
       query = (resource == :shipments) ? "TaskID=fulfilment-task-id" : "TaskID=fulfilment-task-id&IncludeProductInfo=false"
-      body = {"TaskID" => "fulfilment-task-id", "Status" => "AUTHORISED", "Lines" => [{"Quantity" => "1.25"}]}
+      lines = if resource == :shipments
+        [{"ID" => "shipment-line-id", "ShipmentDate" => "2026-10-02", "Carrier" => "Test Carrier", "Boxes" => "Box 1", "TrackingNumber" => "TRACK-1", "TrackingURL" => "https://carrier.example/track/1", "IsShipped" => true}]
+      else
+        [{"ProductID" => "product-id", "LocationID" => "location-id", "Quantity" => "1.25", "BatchSN" => "batch-1"}]
+      end
+      body = {"TaskID" => "fulfilment-task-id", "Status" => "AUTHORISED", "Lines" => lines}
       stubs = Faraday::Adapter::Test::Stubs.new do |stub|
         stub.get("/ExternalApi/v2/sale/fulfilment/#{endpoint}?#{query}") { json_response(body) }
       end
@@ -75,18 +80,26 @@ RSpec.describe "CIN7 Core native correction resource contracts" do
 
     {create: :post, update: :put}.each do |operation, verb|
       it "uses #{verb} for #{resource}.#{operation} without appending or restoring implicitly" do
-        payload = {
-          "TaskID" => "fulfilment-task-id", "Status" => "AUTHORISED",
-          "Lines" => [{"ProductID" => "product-id", "LocationID" => "location-id", "Quantity" => "1.25", "Box" => "Box 1", "BatchSN" => "batch-1"}]
-        }
+        lines = if resource == :shipments
+          [{"ShipmentDate" => "2026-10-02", "Carrier" => "Test Carrier", "Box" => "Box 1", "TrackingNumber" => "TRACK-1", "TrackingURL" => "https://carrier.example/track/1", "IsShipped" => true}]
+        else
+          [{"ProductID" => "product-id", "LocationID" => "location-id", "Quantity" => "1.25", "BatchSN" => "batch-1"}]
+        end
+        lines.first["Box"] = "Box 1" if resource == :packs
+        payload = {"TaskID" => "fulfilment-task-id", "Status" => "AUTHORISED", "Lines" => lines}
+        response_body = if resource == :shipments
+          {"TaskID" => "fulfilment-task-id", "Status" => "AUTHORISED", "Lines" => [{"ID" => "shipment-line-id", "ShipmentDate" => "2026-10-02", "Carrier" => "Test Carrier", "Boxes" => "Box 1", "TrackingNumber" => "TRACK-1", "TrackingURL" => "https://carrier.example/track/1", "IsShipped" => true}]}
+        else
+          payload
+        end
         original = Marshal.load(Marshal.dump(payload))
         stubs = Faraday::Adapter::Test::Stubs.new do |stub|
           stub.public_send(verb, "/ExternalApi/v2/sale/fulfilment/#{endpoint}") do |env|
             expect(JSON.parse(env.body)).to eq(original)
-            json_response(payload)
+            json_response(response_body)
           end
         end
-        expect(build_client(stubs).public_send(resource).public_send(operation, payload: payload).body).to eq(payload)
+        expect(build_client(stubs).public_send(resource).public_send(operation, payload: payload).body).to eq(response_body)
         expect(payload).to eq(original)
         stubs.verify_stubbed_calls
       end
