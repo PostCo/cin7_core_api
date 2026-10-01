@@ -40,6 +40,16 @@ module Cin7CoreAPI
         require_parameter!(:id, id)
         get("sale", params: options.merge(id: id), parameter_map: RETRIEVE_PARAMETERS)
       end
+
+      def update(payload:)
+        validate_payload!(payload, "ID")
+        connection.put("sale", payload: payload)
+      end
+
+      def undo(id:)
+        require_parameter!(:id, id)
+        connection.delete("sale", params: {"ID" => id, "Void" => false})
+      end
     end
   end
 end

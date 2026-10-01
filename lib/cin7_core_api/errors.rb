@@ -2,11 +2,18 @@
 
 module Cin7CoreAPI
   class Error < StandardError
-    attr_reader :response
+    attr_reader :response, :request_method, :request_path
 
-    def initialize(message = nil, response: nil)
+    def initialize(message = nil, response: nil, ambiguous: false, request_method: nil, request_path: nil)
       @response = response
+      @ambiguous = ambiguous
+      @request_method = request_method
+      @request_path = request_path
       super(message)
+    end
+
+    def ambiguous?
+      @ambiguous
     end
 
     def status

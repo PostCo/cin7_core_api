@@ -7,3 +7,5 @@ require "standard/rake"
 RSpec::Core::RakeTask.new(:spec)
 
 task default: [:spec, :standard]
+# Appending prerequisites to :release would run them after Bundler's push tasks.
+task "release:guard_clean" => [:spec, :standard]
