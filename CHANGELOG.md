@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Name the underlying error class in transport failure messages, so a corrupt gzip response still reports `Zlib::DataError` when faraday-net_http 3.5 wraps it in `Faraday::ConnectionFailed`.
+
 ## [0.3.0] - 2026-10-02
 
 - Add explicit credit-note creation/undo and Advanced Sale fulfilment, pick, pack and shipment resources with readback and distinct POST/PUT semantics.
