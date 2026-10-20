@@ -12,7 +12,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    if: github.repository == 'PostCo/cin7_core_api'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Test and lint
+        run: bundle exec rake
+
   publish:
+    needs: test
     if: github.repository == 'PostCo/cin7_core_api'
     runs-on: ubuntu-latest
     environment: release
@@ -31,25 +50,24 @@ jobs:
       - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1
         with:
           ruby-version: "3.3"
-          bundler-cache: true
+          bundler: none
 
       - name: Check release tag matches gem version
         id: version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          bundle exec ruby -Ilib -rcin7_core_api/version <<'RUBY'
+          ruby -Ilib -rcin7_core_api/version <<'RUBY'
           version = Cin7CoreAPI::VERSION
           abort "Release tag must match v#{version}" unless ENV.fetch("RELEASE_TAG") == "v#{version}"
           abort "Invalid gem version" unless /\A\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)*\z/.match?(version)
-          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") { |file| file.puts "gem_path=pkg/cin7_core_api-#{version}.gem" }
+          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") { |file| file.puts "gem_path=cin7_core_api-#{version}.gem" }
           RUBY
 
-      - name: Test and lint
-        run: bundle exec rake
-
       - name: Build gem
-        run: bundle exec rake build
+        env:
+          GEM_PATH_TO_BUILD: ${{ steps.version.outputs.gem_path }}
+        run: gem build cin7_core_api.gemspec --output "$GEM_PATH_TO_BUILD"
 
       - name: Authenticate to RubyGems with GitHub OIDC
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
