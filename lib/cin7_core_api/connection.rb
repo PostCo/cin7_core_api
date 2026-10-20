@@ -81,8 +81,10 @@ module Cin7CoreAPI
         request.params.update(params)
       end
     rescue Faraday::Error, Zlib::Error => error
+      wrapped = error.wrapped_exception if error.is_a?(Faraday::Error)
+      failure = [error.class, wrapped&.class].compact.join(" caused by ")
       # Faraday exceptions can retain the entire authenticated request in their cause.
-      raise TransportError.new("CIN7 Core transport failed (#{error.class})", ambiguous: write, **context), cause: nil
+      raise TransportError.new("CIN7 Core transport failed (#{failure})", ambiguous: write, **context), cause: nil
     end
 
     def normalized_headers(headers)

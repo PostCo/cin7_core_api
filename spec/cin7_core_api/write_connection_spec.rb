@@ -112,6 +112,34 @@ RSpec.describe "CIN7 Core write failures" do
     end
   end
 
+  it "names the error an adapter wraps without leaking its message" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.post("/ExternalApi/v2/sale/payment") do
+        raise Faraday::ConnectionFailed, Zlib::DataError.new("test-application-key response dump")
+      end
+    end
+
+    expect do
+      build_client(stubs).connection.post("sale/payment", payload: {"TaskID" => "task-id"})
+    end.to raise_error(Cin7CoreAPI::TransportError) { |error|
+      expect(error.message).to eq("CIN7 Core transport failed (Faraday::ConnectionFailed caused by Zlib::DataError)")
+      expect(error.full_message).not_to include("test-application-key", "response dump")
+      expect(error).to be_ambiguous
+    }
+  end
+
+  it "does not name an exception the caller was already handling" do
+    stubs = Faraday::Adapter::Test::Stubs.new do |stub|
+      stub.get("/ExternalApi/v2/sale/payment") { raise Zlib::DataError, "corrupt body" }
+    end
+
+    expect do
+      raise ArgumentError, "caller failure"
+    rescue ArgumentError
+      build_client(stubs).connection.get("sale/payment", params: {"ID" => "payment-id"})
+    end.to raise_error(Cin7CoreAPI::TransportError, "CIN7 Core transport failed (Zlib::DataError)")
+  end
+
   it "wraps corrupt gzip responses through the default HTTP adapter" do
     server = TCPServer.new("127.0.0.1", 0)
     calls = 0
