@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.1] - 2026-10-20
 
 - Name the error Faraday wraps in transport failure messages, such as `Faraday::ConnectionFailed caused by Zlib::DataError` for a corrupt gzip response under faraday-net_http 3.5 and `Faraday::TimeoutError caused by Net::ReadTimeout` for a read timeout on any adapter version.
 
