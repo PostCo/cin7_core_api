@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Name the error Faraday wraps in transport failure messages, such as `Faraday::ConnectionFailed caused by Zlib::DataError` for a corrupt gzip response under faraday-net_http 3.5 and `Faraday::TimeoutError caused by Net::ReadTimeout` for a read timeout on any adapter version.
+
 ## [0.3.0] - 2026-10-02
 
 - Add explicit credit-note creation/undo and Advanced Sale fulfilment, pick, pack and shipment resources with readback and distinct POST/PUT semantics.
