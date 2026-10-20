@@ -30,7 +30,6 @@ jobs:
       - name: Test and lint
         run: bundle exec rake
 
-  # This job holds the RubyGems OIDC token, so it installs no gems and never runs Bundler.
   publish:
     needs: test
     if: github.repository == 'PostCo/cin7_core_api'
